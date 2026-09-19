@@ -1,0 +1,58 @@
+name: Contract test
+
+# Runs the same Microcks contract test the VS Code extension runs locally, on
+# every pull request. The --output=github-actions formatter turns each failing
+# operation into an annotation pinned to its line in the OpenAPI file, so a
+# contract break shows up on the diff rather than buried in the job log.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  contract-test:
+    name: GET /products conforms to its contract
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      # The github-actions formatter is on master but not yet in a tagged
+      # release (latest is 1.0.2). Swap this for a release download once 1.0.3
+      # ships. `go install` names the binary after the module, so it lands as
+      # `microcks-cli`.
+      - name: Install Microcks CLI
+        run: |
+          go install github.com/microcks/microcks-cli@master
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Start the service under test
+        run: |
+          go -C server run . &
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3001/products >/dev/null; then
+              echo "service up after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "service did not come up on :3001" >&2
+          exit 1
+
+      # --artifact must be a repo-relative path: it becomes the `file=` property
+      # on the annotation, and GitHub resolves it against the repository root.
+      - name: Run Microcks contract test
+        run: |
+          microcks-cli test \
+            --dry-run \
+            --output=github-actions \
+            --artifact api/ecommerce-api-openapi.yml \
+            --filteredOperations '["GET /products"]' \
+            "E-Commerce Platform API:2.0.0" \
+            http://localhost:3001 \
+            OPEN_API_SCHEMA
