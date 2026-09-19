@@ -20,7 +20,7 @@ paths:
   /products:
     get:
       operationId: GetProducts
-      summary: Get all products with pagination and filtering
+      summary: Get all products with pagination, filtering and review counts
       parameters:
         - name: page
           in: query
@@ -486,6 +486,7 @@ components:
         - name
         - price
         - category
+        - reviewCount
 
     ProductCreate:
       type: object
